@@ -46,10 +46,6 @@ jobs:
         run: |
           sudo python3 build_disk.py restore.ipsw
 
-      - name: Debug session on failure
-        if: failure()
-        uses: mxschmitt/action-tmate@v3
-
       - name: Compress and Split Disk Image
         run: |
           echo "=== Compressing target disk image with zstd ==="

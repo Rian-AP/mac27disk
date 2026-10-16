@@ -36,7 +36,7 @@ def run_cmd(cmd, check=True, capture=False):
 def main():
     ipsw_file = sys.argv[1] if len(sys.argv) > 1 else "restore.ipsw"
     disk_target = "target_disk.dmg"
-    disk_size = "64g"
+    disk_size = "32g"
     
     log(f"1. Extracting encrypted AEA images from {ipsw_file}")
     os.makedirs("aea_in", exist_ok=True)
