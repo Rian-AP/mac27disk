@@ -35,9 +35,8 @@ CRYPTEX_DMG=$(ls dec_out/043-70701*.dmg | head -n 1)
 echo "RootFS DMG:  $ROOTFS_DMG"
 echo "Cryptex DMG: $CRYPTEX_DMG"
 
-echo "=== 3. Creating 64 GB raw disk image ==="
-# -format UDRW creates an uncompressed, sector-level read/write image perfect for VMs
-hdiutil create -size "$DISK_SIZE" -format UDRW -layout GPTSPUD -fs APFS -volname "Macintosh HD" "$DISK_TARGET"
+echo "=== 3. Creating 64 GB disk image ==="
+hdiutil create -size "$DISK_SIZE" -layout GPTSPUD -fs APFS -volname "Macintosh HD" "$DISK_TARGET"
 ls -lh "$DISK_TARGET"
 
 echo "Attaching target disk image..."
