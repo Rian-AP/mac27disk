@@ -32,7 +32,6 @@ jobs:
           swift --version
           
           echo "Removing redundant Xcode versions to free 60+ GB..."
-          # Keep CommandLineTools and remove heavy unused Xcode bundles
           for xcode in /Applications/Xcode*.app; do
             echo "Removing $xcode..."
             sudo rm -rf "$xcode" 2>/dev/null || true
@@ -49,9 +48,15 @@ jobs:
           
           echo "=== Free Space After Cleanup ==="
           df -h
-          
-          echo "Verifying Swift toolchain is intact:"
-          swift --version
+
+      - name: Compile and Sign Native Installer
+        run: |
+          echo "Compiling installer.swift with swiftc..."
+          swiftc -O installer.swift -o installer
+          echo "Signing installer with com.apple.security.virtualization entitlement..."
+          codesign --force --sign - --entitlements entitlements.plist installer
+          echo "Verifying signature and entitlements:"
+          codesign -d --entitlements :- ./installer
 
       - name: Download macOS IPSW
         run: |
@@ -63,7 +68,7 @@ jobs:
       - name: Run Native Apple Installer (VZMacOSInstaller)
         run: |
           echo "Starting installer..."
-          swift installer.swift restore.ipsw disk.img aux.img ${{ github.event.inputs.disk_size_gb }}
+          ./installer restore.ipsw disk.img aux.img ${{ github.event.inputs.disk_size_gb }}
           echo "Checking generated disk..."
           ls -lh disk.img aux.img
 

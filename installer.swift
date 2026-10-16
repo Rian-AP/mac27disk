@@ -2,7 +2,7 @@ import Foundation
 import Virtualization
 
 guard CommandLine.arguments.count >= 4 else {
-    print("Usage: swift installer.swift <path-to-ipsw> <path-to-disk-img> <path-to-aux-img> [disk-size-gb]")
+    print("Usage: ./installer <path-to-ipsw> <path-to-disk-img> <path-to-aux-img> [disk-size-gb]")
     exit(1)
 }
 
@@ -21,20 +21,29 @@ print("Target Disk: \(diskPath) (\(diskSizeGB) GB)")
 print("Auxiliary Storage: \(auxPath)")
 
 print("1. Loading restore image metadata...")
-let sem = DispatchSemaphore(value: 0)
+let loadSem = DispatchSemaphore(value: 0)
 var restoreImageOpt: VZMacOSRestoreImage?
+var loadError: Error?
 
 VZMacOSRestoreImage.load(from: ipswURL) { result in
     switch result {
     case .success(let image):
         restoreImageOpt = image
     case .failure(let err):
-        print("Failed to load restore image: \(err.localizedDescription)")
-        exit(1)
+        loadError = err
     }
-    sem.signal()
+    loadSem.signal()
 }
-sem.wait()
+
+// Drive main runloop while waiting for XPC InstallationService response
+while loadSem.wait(timeout: .now()) == .timedOut {
+    RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.1))
+}
+
+if let err = loadError {
+    print("Failed to load restore image: \(err.localizedDescription)")
+    exit(1)
+}
 
 guard let restoreImage = restoreImageOpt else {
     print("Error: Restore image object is nil")
@@ -97,6 +106,7 @@ let observer = installer.progress.observe(\.fractionCompleted, options: [.initia
     }
 }
 
+let installSem = DispatchSemaphore(value: 0)
 var installError: Error?
 installer.install { result in
     switch result {
@@ -106,11 +116,11 @@ installer.install { result in
         installError = err
         print("\nInstallation failed: \(err.localizedDescription)")
     }
-    sem.signal()
+    installSem.signal()
 }
 
 // Keep runloop alive for progress observation and async completion
-while sem.wait(timeout: .now()) == .timedOut {
+while installSem.wait(timeout: .now()) == .timedOut {
     RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: 0.5))
 }
 
