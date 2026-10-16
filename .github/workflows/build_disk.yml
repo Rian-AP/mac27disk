@@ -1,0 +1,75 @@
+name: Build macOS 27 APFS Disk Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipsw_url:
+        description: 'Direct Apple CDN URL for macOS IPSW'
+        required: true
+        default: 'https://updates.cdn-apple.com/2026FallFCS/59241290-5d51-4ca8-9df4-31624b9a4eac/UniversalMac_27.0.1_26A434_Restore.ipsw'
+      disk_size_gb:
+        description: 'Target disk size in GB'
+        required: true
+        default: '64'
+
+permissions:
+  contents: write
+
+jobs:
+  build-disk:
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up runner disk space
+        run: |
+          echo "=== Initial Disk Space ==="
+          df -h /
+          echo "Removing pre-installed Xcode apps and heavy caches..."
+          sudo rm -rf /Applications/Xcode_*.app /Library/Developer/CommandLineTools
+          sudo rm -rf ~/Library/Caches/*
+          echo "=== Free Space After Cleanup ==="
+          df -h /
+
+      - name: Download macOS IPSW
+        run: |
+          echo "Downloading IPSW from ${{ github.event.inputs.ipsw_url }}..."
+          curl -L -C - --retry 5 --retry-delay 3 -o restore.ipsw "${{ github.event.inputs.ipsw_url }}"
+          ls -lh restore.ipsw
+
+      - name: Run Native Apple Installer (VZMacOSInstaller)
+        run: |
+          echo "Starting installer..."
+          swift installer.swift restore.ipsw disk.img aux.img ${{ github.event.inputs.disk_size_gb }}
+          echo "Checking generated disk..."
+          ls -lh disk.img aux.img
+
+      - name: Remove IPSW to free disk for compression
+        run: |
+          rm -f restore.ipsw
+          echo "=== Space Before Compression ==="
+          df -h /
+
+      - name: Compress and Split Disk Image
+        run: |
+          echo "Compressing disk.img with zstd..."
+          brew install zstd
+          # Sparse APFS disk will compress very efficiently (~8-12 GB)
+          zstd -T0 -3 disk.img -o disk.img.zst
+          rm -f disk.img
+          echo "Splitting compressed archive into 1900MB chunks for GitHub Release limit..."
+          split -b 1900M disk.img.zst "disk.img.zst.part_"
+          rm -f disk.img.zst
+          ls -lh disk.img.zst.part_* aux.img
+
+      - name: Create GitHub Release and Upload Artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG_NAME="macos-27-disk-$(date +'%Y%m%d-%H%M%S')"
+          echo "Creating Release $TAG_NAME..."
+          gh release create "$TAG_NAME" \
+            disk.img.zst.part_* aux.img \
+            --title "macOS 27.0.1 (26A434) Clean APFS Disk" \
+            --notes "Generated via Apple Virtualization.framework (VZMacOSInstaller) on Apple Silicon runner. Contains clean System, Preboot, Recovery, and Data volumes."
