@@ -25,18 +25,34 @@ jobs:
       - name: Free up runner disk space
         run: |
           echo "=== Initial Disk Space ==="
-          df -h /
-          echo "Removing pre-installed Xcode apps and heavy caches..."
-          sudo rm -rf /Applications/Xcode_*.app /Library/Developer/CommandLineTools
-          sudo rm -rf ~/Library/Caches/*
+          df -h
+          
+          echo "Cleaning pre-installed heavy tools and caches..."
+          # Remove Xcode versions (often 30-50 GB on Data volume)
+          sudo rm -rf /Applications/Xcode*.app 2>/dev/null || true
+          sudo rm -rf /Library/Developer/CommandLineTools 2>/dev/null || true
+          
+          # Clean user and brew caches safely
+          rm -rf ~/Library/Caches/* 2>/dev/null || true
+          brew cleanup -s 2>/dev/null || true
+          
+          # Remove Android and .NET caches if present
+          sudo rm -rf /usr/local/share/dotnet 2>/dev/null || true
+          sudo rm -rf /usr/local/lib/android 2>/dev/null || true
+          sudo rm -rf ~/Library/Android 2>/dev/null || true
+          
+          # Purge APFS local snapshots if any exist to free container space
+          sudo tmutil deletelocalsnapshots / 2>/dev/null || true
+          
           echo "=== Free Space After Cleanup ==="
-          df -h /
+          df -h
 
       - name: Download macOS IPSW
         run: |
           echo "Downloading IPSW from ${{ github.event.inputs.ipsw_url }}..."
           curl -L -C - --retry 5 --retry-delay 3 -o restore.ipsw "${{ github.event.inputs.ipsw_url }}"
           ls -lh restore.ipsw
+          df -h
 
       - name: Run Native Apple Installer (VZMacOSInstaller)
         run: |
@@ -49,13 +65,13 @@ jobs:
         run: |
           rm -f restore.ipsw
           echo "=== Space Before Compression ==="
-          df -h /
+          df -h
 
       - name: Compress and Split Disk Image
         run: |
           echo "Compressing disk.img with zstd..."
-          brew install zstd
-          # Sparse APFS disk will compress very efficiently (~8-12 GB)
+          brew install zstd || true
+          # Compress sparse disk image
           zstd -T0 -3 disk.img -o disk.img.zst
           rm -f disk.img
           echo "Splitting compressed archive into 1900MB chunks for GitHub Release limit..."
