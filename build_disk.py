@@ -133,6 +133,7 @@ def main():
 
     log(f"6. Adding Preboot volume with Role B to {target_container}")
     run_cmd(["sudo", "diskutil", "apfs", "addVolume", target_container, "APFS", "Preboot", "-role", "B", "-mountpoint", "/Volumes/TargetPreboot"])
+    run_cmd(["sudo", "chmod", "-R", "777", "/Volumes/TargetPreboot"], check=False)
 
     log("7. Mounting Cryptex DMG and populating Preboot")
     cryptex_mount = "/tmp/cryptex_mnt"
@@ -140,7 +141,7 @@ def main():
     run_cmd(["hdiutil", "attach", cryptex_dmg, "-mountpoint", cryptex_mount, "-readonly", "-nobrowse"])
     
     # 1. Official Cryptexes/OS tree
-    os.makedirs("/Volumes/TargetPreboot/Cryptexes/OS", exist_ok=True)
+    run_cmd(["sudo", "mkdir", "-p", "/Volumes/TargetPreboot/Cryptexes/OS"])
     print("Copying Cryptex tree via ditto...", flush=True)
     run_cmd(["sudo", "ditto", "--noextattr", cryptex_mount, "/Volumes/TargetPreboot/Cryptexes/OS"])
     
@@ -151,9 +152,9 @@ def main():
         
     for u in uuids_to_seed:
         target_dir = f"/Volumes/TargetPreboot/{u}/cryptex1/current"
-        os.makedirs(target_dir, exist_ok=True)
+        run_cmd(["sudo", "mkdir", "-p", target_dir])
         print(f"Seeding {target_dir}/os.dmg...", flush=True)
-        shutil.copy2(cryptex_dmg, f"{target_dir}/os.dmg")
+        run_cmd(["sudo", "cp", cryptex_dmg, f"{target_dir}/os.dmg"])
 
     log("8. Adding Data & Recovery volumes to container")
     run_cmd(["sudo", "diskutil", "apfs", "addVolume", target_container, "APFS", "Data", "-role", "D", "-nomount"], check=False)

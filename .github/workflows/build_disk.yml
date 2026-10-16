@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-disk:
-    runs-on: macos-14-arm64
+    runs-on: macos-14
     timeout-minutes: 360
     permissions:
       contents: write
@@ -19,24 +19,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Free up runner disk space
+      - name: Install ipsw and start background disk cleanup
         run: |
-          echo "=== Freeing runner disk space ==="
+          echo "=== 1. Starting background disk cleanup ==="
           df -h /
-          sudo rm -rf /Applications/Xcode_*.app || true
-          sudo rm -rf ~/Library/Caches/* || true
-          df -h /
+          sudo rm -rf /Applications/Xcode_*.app ~/Library/Caches/* &
+          CLEANUP_PID=$!
+          echo "Cleanup PID: $CLEANUP_PID"
 
-      - name: Install Tools (ipsw, zstd)
-        run: |
-          echo "Installing zstd..."
-          brew install zstd
-          echo "Downloading official standalone ipsw binary..."
-          curl -L -o ipsw.tar.gz "https://github.com/blacktop/ipsw/releases/download/v3.1.739/ipsw_3.1.739_macOS_arm64.tar.gz"
-          tar -xvf ipsw.tar.gz
-          sudo mv ipsw /usr/local/bin/
-          rm -f ipsw.tar.gz
+          echo "=== 2. Downloading standalone ipsw binary ==="
+          curl -sL "https://github.com/blacktop/ipsw/releases/download/v3.1.739/ipsw_3.1.739_macOS_arm64.tar.gz" | tar -xz -C /tmp/
+          sudo mv /tmp/ipsw /usr/local/bin/
           ipsw version
+
+          echo "=== 3. Waiting for disk cleanup to complete ==="
+          wait $CLEANUP_PID || true
+          df -h /
 
       - name: Download macOS IPSW
         run: |
@@ -46,7 +44,7 @@ jobs:
 
       - name: Assemble Native APFS Disk via ASR
         run: |
-          python3 build_disk.py restore.ipsw
+          sudo python3 build_disk.py restore.ipsw
 
       - name: Debug session on failure
         if: failure()
