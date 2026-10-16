@@ -2,7 +2,7 @@
 set -euo pipefail
 
 IPSW_FILE="${1:-restore.ipsw}"
-DISK_RAW="disk.raw"
+DISK_TARGET="target_disk.dmg"
 DISK_SIZE="64g"
 
 echo "=== 1. Extracting encrypted AEA images from IPSW ==="
@@ -36,10 +36,12 @@ echo "RootFS DMG:  $ROOTFS_DMG"
 echo "Cryptex DMG: $CRYPTEX_DMG"
 
 echo "=== 3. Creating 64 GB raw disk image ==="
-hdiutil create -size "$DISK_SIZE" -layout GPTSPUD -fs APFS -volname "Macintosh HD" "$DISK_RAW"
+# -format UDRW creates an uncompressed, sector-level read/write image perfect for VMs
+hdiutil create -size "$DISK_SIZE" -format UDRW -layout GPTSPUD -fs APFS -volname "Macintosh HD" "$DISK_TARGET"
+ls -lh "$DISK_TARGET"
 
-echo "Attaching target raw disk..."
-RAW_DEV=$(hdiutil attach -nomount "$DISK_RAW" | grep Apple_APFS | awk '{print $1}')
+echo "Attaching target disk image..."
+RAW_DEV=$(hdiutil attach -nomount "$DISK_TARGET" | grep Apple_APFS | awk '{print $1}')
 echo "Attached target APFS container physical store: $RAW_DEV"
 
 echo "=== 4. Running native Apple Software Restore (ASR) ==="
@@ -65,10 +67,10 @@ echo "Unmounting cleanly..."
 hdiutil detach /tmp/cryptex_mnt
 sudo diskutil unmount /Volumes/Preboot || true
 
-# Detach the raw disk
+# Detach the target disk
 BASE_DEV=$(echo "$RAW_DEV" | sed -E 's/s[0-9]+$//')
 hdiutil detach "$BASE_DEV" || true
 
 rm -rf dec_out
-echo "=== Disk build complete! Generated $DISK_RAW ==="
-ls -lh "$DISK_RAW"
+echo "=== Disk build complete! Generated $DISK_TARGET ==="
+ls -lh "$DISK_TARGET"

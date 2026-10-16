@@ -55,14 +55,14 @@ jobs:
 
       - name: Compress and Split Disk Image
         run: |
-          echo "Compressing disk.raw with zstd..."
-          # Compress raw disk image with multi-threading
-          zstd -T0 -3 disk.raw -o disk.raw.zst
-          rm -f disk.raw
+          echo "Compressing target_disk.dmg with zstd..."
+          # Compress disk image with multi-threading
+          zstd -T0 -3 target_disk.dmg -o target_disk.dmg.zst
+          rm -f target_disk.dmg
           echo "Splitting compressed archive into 1900MB chunks for GitHub Release limit..."
-          split -b 1900M disk.raw.zst "disk.raw.zst.part_"
-          rm -f disk.raw.zst
-          ls -lh disk.raw.zst.part_*
+          split -b 1900M target_disk.dmg.zst "target_disk.dmg.zst.part_"
+          rm -f target_disk.dmg.zst
+          ls -lh target_disk.dmg.zst.part_*
 
       - name: Create GitHub Release and Upload Artifacts
         env:
@@ -71,6 +71,6 @@ jobs:
           TAG_NAME="macos-27-disk-$(date +'%Y%m%d-%H%M%S')"
           echo "Creating Release $TAG_NAME..."
           gh release create "$TAG_NAME" \
-            disk.raw.zst.part_* \
+            target_disk.dmg.zst.part_* \
             --title "macOS 27.0.1 (26A434) Clean APFS Disk" \
             --notes "Generated natively via Apple Software Restore (ASR) on macOS. Contains unified APFS container with Macintosh HD and Preboot (with Cryptex)."
