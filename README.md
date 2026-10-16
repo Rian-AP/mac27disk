@@ -1,28 +1,26 @@
 # macOS 27 Clean APFS Disk Builder
 
-Automated builder for clean Apple Silicon macOS virtual machine disks using Apple's official `Virtualization.framework` (`VZMacOSInstaller`) on GitHub Actions Apple Silicon runners.
+Automated builder for clean Apple Silicon macOS disk images using native Apple tools (`asr`, `hdiutil`, `diskutil`) on GitHub Actions macOS runners.
 
 ## How it works
 
-1. Runs on a real Apple Silicon (`macos-15`) runner.
-2. Downloads official macOS IPSW restore image from Apple CDN.
-3. Automatically sets up GPT, APFS container, and all 4 required volumes:
-   - `Macintosh HD` (Sealed System snapshot)
-   - `Preboot` (Containing complete `Cryptexes/OS` with `dyld_shared_cache_arm64e`, boot manifests and tickets)
-   - `Recovery` (Apple Recovery environment)
-   - `Data` (APFS Data volume)
-4. Compresses and splits the result into release parts under 2 GB.
+1. Downloads official macOS IPSW restore image from Apple CDN.
+2. Decrypts RootFS and Cryptex AEA containers.
+3. Creates a 64 GB raw disk with GUID Partition Table and native APFS Container.
+4. Restores RootFS via Apple Software Restore (`asr`).
+5. Stages Cryptex libraries into `/Volumes/Preboot/Cryptexes/OS`.
+6. Compresses and splits the result into release parts under 2 GB.
 
 ## How to extract on Windows
 
-After downloading all `disk.img.zst.part_*` files from the GitHub Release into one directory:
+After downloading all `disk.raw.zst.part_*` files from the GitHub Release into one directory:
 
 ```bash
 # 1. Concatenate all parts
-cat disk.img.zst.part_* > disk.img.zst
+cat disk.raw.zst.part_* > disk.raw.zst
 
-# 2. Decompress with zstd (or 7-Zip with zstd support)
-zstd -d disk.img.zst -o disk.img
+# 2. Decompress with zstd
+zstd -d disk.raw.zst -o disk.raw
 ```
 
-Then attach `disk.img` directly to QEMU as a block device.
+Then attach `disk.raw` directly to QEMU as an NVMe or virtio block device.
