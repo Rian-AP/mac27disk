@@ -49,12 +49,8 @@ sudo asr restore --source "$ROOTFS_DMG" --target "$RAW_DEV" --erase --noprompt -
 echo "=== 5. Setting up Preboot volume in the target container ==="
 diskutil list
 
-# Find our target container disk (the one holding the restored physical store)
-TARGET_CONTAINER=$(diskutil list | grep -B 2 "$RAW_DEV" | head -n 1 | awk '{print $1}')
-if [[ -z "$TARGET_CONTAINER" ]]; then
-    # Fallback: look for container created on RAW_DEV
-    TARGET_CONTAINER=$(diskutil apfs list | grep -B 3 "Physical Store.*$RAW_DEV" | grep "APFS Container Disk" | awk '{print $NF}')
-fi
+# Query APFS container ID directly from diskutil info for the physical store partition
+TARGET_CONTAINER=$(diskutil apfs list | grep -E "Container disk[0-9]+" | tail -n 1 | awk '{print $NF}')
 echo "Target APFS Container: $TARGET_CONTAINER"
 
 echo "Adding Preboot volume with Role B to $TARGET_CONTAINER..."
