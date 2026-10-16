@@ -36,7 +36,7 @@ echo "RootFS DMG:  $ROOTFS_DMG"
 echo "Cryptex DMG: $CRYPTEX_DMG"
 
 echo "=== 3. Creating 64 GB raw disk image ==="
-hdiutil create -size "$DISK_SIZE" -layout GPTSPUD -type RAW -fs APFS -volname "Macintosh HD" "$DISK_RAW"
+hdiutil create -size "$DISK_SIZE" -layout GPTSPUD -fs APFS -volname "Macintosh HD" "$DISK_RAW"
 
 echo "Attaching target raw disk..."
 RAW_DEV=$(hdiutil attach -nomount "$DISK_RAW" | grep Apple_APFS | awk '{print $1}')
