@@ -8,69 +8,65 @@ on:
         required: true
         default: 'https://updates.cdn-apple.com/2026FallFCS/59241290-5d51-4ca8-9df4-31624b9a4eac/UniversalMac_27.0.1_26A434_Restore.ipsw'
 
-permissions:
-  contents: write
-
 jobs:
   build-disk:
-    runs-on: macos-15
+    runs-on: macos-15-arm64
+    timeout-minutes: 360
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Free up runner disk space
         run: |
-          echo "=== Initial Disk Space ==="
-          df -h
-          
-          echo "Removing heavy Xcode bundles to maximize disk space..."
-          sudo rm -rf /Applications/Xcode*.app 2>/dev/null || true
-          rm -rf ~/Library/Caches/* 2>/dev/null || true
-          brew cleanup -s 2>/dev/null || true
-          sudo rm -rf /usr/local/share/dotnet 2>/dev/null || true
-          sudo rm -rf /usr/local/lib/android 2>/dev/null || true
-          sudo rm -rf ~/Library/Android 2>/dev/null || true
-          
-          echo "=== Free Space After Cleanup ==="
-          df -h
+          echo "=== Freeing runner disk space ==="
+          df -h /
+          sudo rm -rf /Applications/Xcode_*.app || true
+          sudo rm -rf ~/Library/Caches/* || true
+          df -h /
 
       - name: Install Tools (ipsw, zstd)
         run: |
-          echo "Installing standalone ipsw v3.1.739 binary for macOS arm64..."
-          curl -L "https://github.com/blacktop/ipsw/releases/download/v3.1.739/ipsw_3.1.739_macOS_arm64.tar.gz" | sudo tar -xz -C /usr/local/bin ipsw
-          sudo chmod +x /usr/local/bin/ipsw
+          echo "Installing zstd..."
+          brew install zstd
+          echo "Downloading official standalone ipsw binary..."
+          curl -L -o ipsw.tar.gz "https://github.com/blacktop/ipsw/releases/download/v3.1.739/ipsw_3.1.739_macOS_arm64.tar.gz"
+          tar -xvf ipsw.tar.gz
+          sudo mv ipsw /usr/local/bin/
+          rm -f ipsw.tar.gz
           ipsw version
 
       - name: Download macOS IPSW
         run: |
-          echo "Downloading IPSW from ${{ github.event.inputs.ipsw_url }}..."
-          curl -L -C - --retry 5 --retry-delay 3 -o restore.ipsw "${{ github.event.inputs.ipsw_url }}"
+          echo "=== Downloading macOS IPSW from Apple CDN ==="
+          curl -L -o restore.ipsw "${{ github.event.inputs.ipsw_url }}"
           ls -lh restore.ipsw
-          df -h
 
       - name: Assemble Native APFS Disk via ASR
         run: |
-          chmod +x build_disk.sh
-          ./build_disk.sh restore.ipsw
+          python3 build_disk.py restore.ipsw
+
+      - name: Debug session on failure
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
 
       - name: Compress and Split Disk Image
         run: |
-          echo "Compressing target_disk.dmg with zstd..."
-          # Compress disk image with multi-threading
-          zstd -T0 -3 target_disk.dmg -o target_disk.dmg.zst
-          rm -f target_disk.dmg
-          echo "Splitting compressed archive into 1900MB chunks for GitHub Release limit..."
-          split -b 1900M target_disk.dmg.zst "target_disk.dmg.zst.part_"
-          rm -f target_disk.dmg.zst
-          ls -lh target_disk.dmg.zst.part_*
+          echo "=== Compressing target disk image with zstd ==="
+          zstd -T0 -3 target_disk.dmg -o disk.raw.zst
+          ls -lh disk.raw.zst
+          echo "=== Splitting into 1.9 GB release chunks ==="
+          split -b 1900M disk.raw.zst "disk.raw.zst.part_"
+          ls -lh disk.raw.zst.part_*
+          rm -f target_disk.dmg disk.raw.zst
 
       - name: Create GitHub Release and Upload Artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG_NAME="macos-27-disk-$(date +'%Y%m%d-%H%M%S')"
-          echo "Creating Release $TAG_NAME..."
-          gh release create "$TAG_NAME" \
-            target_disk.dmg.zst.part_* \
-            --title "macOS 27.0.1 (26A434) Clean APFS Disk" \
-            --notes "Generated natively via Apple Software Restore (ASR) on macOS. Contains unified APFS container with Macintosh HD and Preboot (with Cryptex)."
+          TAG="v27.0.1-26A434-clean"
+          gh release create "$TAG" disk.raw.zst.part_* \
+            --title "macOS 27.0.1 (26A434) Native APFS Master Disk" \
+            --notes "Original sealed Apple Silicon APFS disk image restored via native ASR. Ready for QEMU / Reims vGPU."
