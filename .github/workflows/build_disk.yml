@@ -27,10 +27,16 @@ jobs:
           echo "=== Initial Disk Space ==="
           df -h
           
-          echo "Cleaning pre-installed heavy tools and caches..."
-          # Remove Xcode versions (often 30-50 GB on Data volume)
-          sudo rm -rf /Applications/Xcode*.app 2>/dev/null || true
-          sudo rm -rf /Library/Developer/CommandLineTools 2>/dev/null || true
+          echo "Selecting Command Line Tools / Xcode..."
+          sudo xcode-select -s /Library/Developer/CommandLineTools || sudo xcode-select -s /Applications/Xcode.app || true
+          swift --version
+          
+          echo "Removing redundant Xcode versions to free 60+ GB..."
+          # Keep CommandLineTools and remove heavy unused Xcode bundles
+          for xcode in /Applications/Xcode*.app; do
+            echo "Removing $xcode..."
+            sudo rm -rf "$xcode" 2>/dev/null || true
+          done
           
           # Clean user and brew caches safely
           rm -rf ~/Library/Caches/* 2>/dev/null || true
@@ -41,11 +47,11 @@ jobs:
           sudo rm -rf /usr/local/lib/android 2>/dev/null || true
           sudo rm -rf ~/Library/Android 2>/dev/null || true
           
-          # Purge APFS local snapshots if any exist to free container space
-          sudo tmutil deletelocalsnapshots / 2>/dev/null || true
-          
           echo "=== Free Space After Cleanup ==="
           df -h
+          
+          echo "Verifying Swift toolchain is intact:"
+          swift --version
 
       - name: Download macOS IPSW
         run: |
